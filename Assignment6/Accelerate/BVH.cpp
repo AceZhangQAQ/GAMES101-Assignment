@@ -50,24 +50,32 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
     }
     else {
         Bounds3 centroidBounds;
+        //找到最大的包围盒
         for (int i = 0; i < objects.size(); ++i)
             centroidBounds =
                 Union(centroidBounds, objects[i]->getBounds().Centroid());
+        //找到该包围盒的最长轴
         int dim = centroidBounds.maxExtent();
         switch (dim) {
+        //当最长轴为x轴
         case 0:
+            //沿着x轴，根据每个元素的包围盒的中心点x值，由小到大进行排序
             std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
                 return f1->getBounds().Centroid().x <
                        f2->getBounds().Centroid().x;
             });
             break;
+        //当最长轴为y轴
         case 1:
+            //沿着y轴，根据每个元素的包围盒的中心点y值，由小到大进行排序
             std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
                 return f1->getBounds().Centroid().y <
                        f2->getBounds().Centroid().y;
             });
             break;
+        //当最长轴为z轴
         case 2:
+            //沿着z轴，根据每个元素的包围盒的中心点z值，由小到大进行排序
             std::sort(objects.begin(), objects.end(), [](auto f1, auto f2) {
                 return f1->getBounds().Centroid().z <
                        f2->getBounds().Centroid().z;
@@ -75,18 +83,22 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
             break;
         }
 
+        //将左右元素根据排序结果划分为两半
         auto beginning = objects.begin();
         auto middling = objects.begin() + (objects.size() / 2);
         auto ending = objects.end();
 
-        auto leftshapes = std::vector<Object*>(beginning, middling);
-        auto rightshapes = std::vector<Object*>(middling, ending);
+        auto leftshapes = std::vector<Object*>(beginning, middling);//左边的元素
+        auto rightshapes = std::vector<Object*>(middling, ending);//右边的元素
 
+        //断言左边+右边元素大小是否等于所有元素和
         assert(objects.size() == (leftshapes.size() + rightshapes.size()));
 
+        //对左边和右边元素递归建立BVH树
         node->left = recursiveBuild(leftshapes);
         node->right = recursiveBuild(rightshapes);
 
+        //根据递归建立的结果，更新当前节点（左右元素的父节点）的包围盒状态
         node->bounds = Union(node->left->bounds, node->right->bounds);
     }
 
