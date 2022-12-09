@@ -82,26 +82,76 @@ BVHBuildNode* BVHAccel::recursiveBuild(std::vector<Object*> objects)
             });
             break;
         }
+        //使用BVH原始的分割方法
+        if(this->splitMethod != BVHAccel::SplitMethod::SAH){
+            //将左右元素根据排序结果划分为两半
+            auto beginning = objects.begin();
+            auto middling = objects.begin() + (objects.size() / 2);
+            auto ending = objects.end();
 
-        //将左右元素根据排序结果划分为两半
-        auto beginning = objects.begin();
-        auto middling = objects.begin() + (objects.size() / 2);
-        auto ending = objects.end();
+            auto leftshapes = std::vector<Object*>(beginning, middling);//左边的元素
+            auto rightshapes = std::vector<Object*>(middling, ending);//右边的元素
 
-        auto leftshapes = std::vector<Object*>(beginning, middling);//左边的元素
-        auto rightshapes = std::vector<Object*>(middling, ending);//右边的元素
+            //断言左边+右边元素大小是否等于所有元素和
+            assert(objects.size() == (leftshapes.size() + rightshapes.size()));
 
-        //断言左边+右边元素大小是否等于所有元素和
-        assert(objects.size() == (leftshapes.size() + rightshapes.size()));
+            //对左边和右边元素递归建立BVH树
+            node->left = recursiveBuild(leftshapes);
+            node->right = recursiveBuild(rightshapes);
 
-        //对左边和右边元素递归建立BVH树
-        node->left = recursiveBuild(leftshapes);
-        node->right = recursiveBuild(rightshapes);
+            //根据递归建立的结果，更新当前节点（左右元素的父节点）的包围盒状态
+            node->bounds = Union(node->left->bounds, node->right->bounds);
+        }
+        //使用SAH分割方法
+        else{
+            //初始化SAH相关参数
+            double boxArea = centroidBounds.SurfaceArea();  //总包围盒表面积
+            int partitionAxis = dim == 0 ? 0 : dim == 1 ? 1 : 2;    //在哪个轴上进行分割
+            int partitionIndex = this->SAHBucketNum / 2;   //以第几个桶作为分割(默认选中间那个桶)
+            double minCost = std::numeric_limits<double>::max();    //当前分割方式整体的最小花费
 
-        //根据递归建立的结果，更新当前节点（左右元素的父节点）的包围盒状态
-        node->bounds = Union(node->left->bounds, node->right->bounds);
+            //根据在相应轴上排过序的元素，遍历划分方式并找到最优的划分方案
+            for (int i = 1; i < this->SAHBucketNum; i++){
+                auto begining = objects.begin();    //最左边
+                auto ending = objects.end();    //最右边
+                auto pivot = objects.begin() + (objects.size() * i / this->SAHBucketNum);   //划分轴元素
+
+                auto leftshapes = std::vector<Object*>(begining,pivot); //左边的元素
+                auto rightshapes = std::vector<Object*>(pivot,ending);  //右边的元素
+
+                //求出两边包围盒的表面积
+                Bounds3 leftBounds,rightBounds;
+                for(auto object : leftshapes){
+                    leftBounds = Union(leftBounds,object->getBounds());
+                }
+                for(auto object : rightshapes){
+                    rightBounds = Union(rightBounds,object->getBounds());
+                }
+                double leftArea = leftBounds.SurfaceArea();
+                double rightArea = rightBounds.SurfaceArea();
+
+                //计算当前划分方式的代价
+                double currentCost = 1 + (leftshapes.size() * leftArea + rightshapes.size() * rightArea) / boxArea;
+
+                //更新最小代价，并记录轴的索引
+                if(currentCost < minCost){
+                    minCost = currentCost;
+                    partitionIndex = i;
+                }
+            }
+
+            //根据最优的划分方案递归求子节点的划分
+            auto begining = objects.begin();    //最左边
+            auto ending = objects.end();    //最右边
+            auto pivot = objects.begin() + (objects.size() * partitionIndex / this->SAHBucketNum);   //划分轴元素
+            auto leftshapes = std::vector<Object*>(begining,pivot); //左边的元素
+            auto rightshapes = std::vector<Object*>(pivot,ending);  //右边的元素
+            assert(objects.size() == (leftshapes.size() + rightshapes.size()));
+            node->left = recursiveBuild(leftshapes);
+            node->right = recursiveBuild(rightshapes);
+            node->bounds = Union(node->left->bounds, node->right->bounds);
+        }
     }
-
     return node;
 }
 
