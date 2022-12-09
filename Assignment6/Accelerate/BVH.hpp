@@ -43,6 +43,7 @@ public:
     // BVHAccel Private Data
     const int maxPrimsInNode;
     const SplitMethod splitMethod;
+    const int SAHBucketNum = 32;
     std::vector<Object*> primitives;
 };
 
